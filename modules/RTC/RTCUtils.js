@@ -179,6 +179,7 @@ function getConstraints(um, options = {}) {
     // @see https://github.com/jitsi/lib-jitsi-meet/pull/136
     const isNewStyleConstraintsSupported
         = browser.isFirefox()
+            || browser.isSafariWithVP8()
             || browser.isEdge()
             || browser.isReactNative();
 
@@ -1217,7 +1218,7 @@ class RTCUtils extends Listenable {
             };
 
             obtainDevices({
-                options,
+                devices: options.devices,
                 streams: {},
                 successCallback: resolve,
                 errorCallback: reject,
@@ -1551,27 +1552,27 @@ const rtcUtils = new RTCUtils();
 
 /**
  *
- * @param context Execution context, containing options and callbacks
+ * @param options
  */
-function obtainDevices(context) {
-    if (!context.options.devices || context.options.devices.length === 0) {
-        return context.successCallback(context.streams || {});
+function obtainDevices(options) {
+    if (!options.devices || options.devices.length === 0) {
+        return options.successCallback(options.streams || {});
     }
 
-    const device = context.options.devices.splice(0, 1);
+    const device = options.devices.splice(0, 1);
 
-    context.deviceGUM[device](context.options)
+    options.deviceGUM[device]()
         .then(stream => {
-            context.streams = context.streams || {};
-            context.streams[device] = stream;
-            obtainDevices(context);
+            options.streams = options.streams || {};
+            options.streams[device] = stream;
+            obtainDevices(options);
         }, error => {
-            Object.keys(context.streams).forEach(
-                d => rtcUtils.stopMediaStream(context.streams[d]));
+            Object.keys(options.streams).forEach(
+                d => rtcUtils.stopMediaStream(options.streams[d]));
             logger.error(
                 `failed to obtain ${device} stream - stop`, error);
 
-            context.errorCallback(error);
+            options.errorCallback(error);
         });
 }
 

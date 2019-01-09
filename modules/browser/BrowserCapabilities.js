@@ -78,6 +78,17 @@ export default class BrowserCapabilities extends BrowserDetection {
     }
 
     /**
+     * Checks if current browser is a Safari and a version of Safari that
+     * supports VP8.
+     *
+     * @returns {boolean}
+     */
+    isSafariWithVP8() {
+        return this.isSafari()
+            && !this.isVersionLessThan('12.1');
+    }
+
+    /**
      * Checks if the current browser is supported.
      *
      * @returns {boolean} true if the browser is supported, false otherwise.
@@ -97,7 +108,8 @@ export default class BrowserCapabilities extends BrowserDetection {
      * otherwise.
      */
     supportsVideoMuteOnConnInterrupted() {
-        return this.isChromiumBased() || this.isReactNative();
+        return this.isChromiumBased() || this.isReactNative()
+            || this.isSafariWithVP8();
     }
 
     /**
@@ -109,7 +121,7 @@ export default class BrowserCapabilities extends BrowserDetection {
         // FIXME bandwidth stats are currently not implemented for FF on our
         // side, but not sure if not possible ?
         return !this.isFirefox() && !this.isEdge()
-            && !this.isSafariWithWebrtc();
+            && !(this.isSafariWithWebrtc() && !this.isSafariWithVP8());
     }
 
     /**
@@ -161,7 +173,8 @@ export default class BrowserCapabilities extends BrowserDetection {
      * candidates through the legacy getStats() API.
      */
     supportsLocalCandidateRttStatistics() {
-        return this.isChromiumBased() || this.isReactNative();
+        return this.isChromiumBased() || this.isReactNative()
+            || this.isSafariWithVP8();
     }
 
     /**
@@ -187,7 +200,7 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @returns {boolean}
      */
     supportsRtpSender() {
-        return this.isFirefox();
+        return this.isFirefox() || this.isSafariWithVP8();
     }
 
     /**
@@ -218,9 +231,10 @@ export default class BrowserCapabilities extends BrowserDetection {
         // FIXME: Check if we can use supportsVideoOut and supportsVideoIn. I
         // leave the old implementation here in order not to brake something.
 
-        // Currently Safari using webrtc/adapter does not support video due in
-        // part to Safari only supporting H264 and the bridge sending VP8.
-        return !this.isSafariWithWebrtc();
+        // Older versions of Safari using webrtc/adapter do not support video
+        // due in part to Safari only supporting H264 and the bridge sending VP8
+        // Newer Safari support VP8 and other WebRTC features.
+        return !this.isSafariWithWebrtc() || this.isSafariWithVP8();
     }
 
     /**
@@ -239,6 +253,38 @@ export default class BrowserCapabilities extends BrowserDetection {
      */
     usesUnifiedPlan() {
         return this.isFirefox();
+    }
+
+    /**
+     * Checks if the browser uses unified plan by default.
+     *
+     * @returns {boolean}
+     */
+    isUnifiedPlanDefault() {
+        if (this.isFirefox()) {
+            return true;
+        }
+
+        if (this.supportsSdpSemantics()) {
+            // FIXME: Find a more elegant solution without creating a dummy
+            // connection, the code doesn't go this branch for now as Chrome's
+            // semantics is set explicitly in RTC.js
+            const pc = new RTCPeerConnection();
+            const semantics = pc.getConfiguration().sdpSemantics;
+
+            pc.close();
+            return semantics === 'unified-plan';
+        }
+
+        if (this.isSafariWithVP8()) {
+            // eslint-disable-next-line max-len
+            // https://trac.webkit.org/changeset/236144/webkit/trunk/LayoutTests/webrtc/video-addLegacyTransceiver.html
+            // eslint-disable-next-line no-undef
+            return Object.keys(RTCRtpTransceiver.prototype)
+                   .indexOf('currentDirection') > -1;
+        }
+
+        return false;
     }
 
     /**
@@ -282,8 +328,7 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @returns {boolean} {@code true} if the browser supposrts getDisplayMedia.
      */
     supportsGetDisplayMedia() {
-        return typeof navigator.getDisplayMedia !== 'undefined'
-            || typeof navigator.mediaDevices.getDisplayMedia !== 'undefined';
+        return navigator.getDisplayMedia !== undefined;
     }
 
     /**

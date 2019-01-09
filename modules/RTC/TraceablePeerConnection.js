@@ -1047,8 +1047,7 @@ function extractSSRCMap(desc) {
 
 /**
  * Takes a SessionDescription object and returns a "normalized" version.
- * Currently it takes care of ordering the a=ssrc lines and denoting receive
- * only SSRCs.
+ * Currently it only takes care of ordering the a=ssrc lines.
  */
 const normalizePlanB = function(desc) {
     if (typeof desc !== 'object' || desc === null
@@ -1107,7 +1106,7 @@ const normalizePlanB = function(desc) {
                     }
                 }
 
-                mLine.ssrcs = replaceDefaultUnifiedPlanMsid(newSsrcLines);
+                mLine.ssrcs = newSsrcLines;
             }
         });
     }
@@ -1120,48 +1119,6 @@ const normalizePlanB = function(desc) {
         sdp: resStr
     });
 };
-
-/**
- * Unified plan differentiates a remote track not associated with a stream using
- * the msid "-", which can incorrectly trigger an onaddstream event in plan-b.
- * For jitsi, these tracks are actually receive-only ssrcs. To prevent
- * onaddstream from firing, remove the ssrcs with msid "-" except the cname
- * line. Normally the ssrcs are not used by the client, as the bridge controls
- * media flow, but keep one reference to the ssrc for the p2p case.
- *
- * @param {Array<Object>} ssrcLines - The ssrc lines from a remote description.
- * @private
- * @returns {Array<Object>} ssrcLines with removed lines referencing msid "-".
- */
-function replaceDefaultUnifiedPlanMsid(ssrcLines = []) {
-    if (!browser.isChrome() || !browser.isVersionGreaterThan(70)) {
-        return ssrcLines;
-    }
-
-    let filteredLines = [ ...ssrcLines ];
-
-    const problematicSsrcIds = ssrcLines.filter(ssrcLine =>
-        ssrcLine.attribute === 'mslabel' && ssrcLine.value === '-')
-        .map(ssrcLine => ssrcLine.id);
-
-    problematicSsrcIds.forEach(ssrcId => {
-        // Find the cname which is to be modified and left in.
-        const cnameLine = filteredLines.find(line =>
-            line.id === ssrcId && line.attribute === 'cname');
-
-        cnameLine.value = `recvonly-${ssrcId}`;
-
-        // Remove all of lines for the ssrc.
-        filteredLines
-            = filteredLines.filter(line => line.id !== ssrcId);
-
-        // But re-add the cname line so there is a reference kept to the ssrc
-        // in the SDP.
-        filteredLines.push(cnameLine);
-    });
-
-    return filteredLines;
-}
 
 /**
  * Makes sure that both audio and video directions are configured as 'sendrecv'.
@@ -1435,8 +1392,8 @@ TraceablePeerConnection.prototype._addStream = function(mediaStream) {
  * @param {MediaStream} mediaStream
  */
 TraceablePeerConnection.prototype._removeStream = function(mediaStream) {
-    if (browser.isFirefox()) {
-        this._handleFirefoxRemoveStream(mediaStream);
+    if (browser.supportsRtpSender()) {
+        this._handleSenderRemoveStream(mediaStream);
     } else {
         this.peerconnection.removeStream(mediaStream);
     }
@@ -1500,8 +1457,8 @@ TraceablePeerConnection.prototype.removeTrack = function(localTrack) {
     this.localSSRCs.delete(localTrack.rtcId);
 
     if (webRtcStream) {
-        if (browser.isFirefox()) {
-            this._handleFirefoxRemoveStream(webRtcStream);
+        if (browser.supportsRtpSender()) {
+            this._handleSenderRemoveStream(webRtcStream);
         } else {
             this.peerconnection.removeStream(webRtcStream);
         }
@@ -1541,7 +1498,7 @@ TraceablePeerConnection.prototype.findSenderByStream = function(stream) {
  * renegotiation will be needed. Otherwise no renegotiation is needed.
  */
 TraceablePeerConnection.prototype.replaceTrack = function(oldTrack, newTrack) {
-    if (browser.isFirefox() && oldTrack && newTrack) {
+    if (browser.supportsRtpSender() && oldTrack && newTrack) {
         // Add and than remove stream in FF leads to wrong local SDP. In order
         // to workaround the issue we need to use sender.replaceTrack().
         const sender = this.findSenderByStream(oldTrack.getOriginalStream());
@@ -1628,10 +1585,10 @@ TraceablePeerConnection.prototype.removeTrackMute = function(localTrack) {
 };
 
 /**
- * Remove stream handling for firefox
+ * Remove stream handling for browsers supporting RTPSender
  * @param stream: webrtc media stream
  */
-TraceablePeerConnection.prototype._handleFirefoxRemoveStream = function(
+TraceablePeerConnection.prototype._handleSenderRemoveStream = function(
         stream) {
     if (!stream) {
         // There is nothing to be changed
@@ -1924,7 +1881,7 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(description) {
 
     // Safari WebRTC errors when no supported video codec is found in the offer.
     // To prevent the error, inject H264 into the video mLine.
-    if (browser.isSafariWithWebrtc()) {
+    if (browser.isSafariWithWebrtc() && !browser.isSafariWithVP8()) {
         logger.debug('Maybe injecting H264 into the remote description');
 
         // eslint-disable-next-line no-param-reassign
@@ -2112,7 +2069,7 @@ TraceablePeerConnection.prototype.close = function() {
  * @private
  */
 const _fixAnswerRFC4145Setup = function(offer, answer) {
-    if (!browser.isChrome()) {
+    if (!browser.isChrome() && !browser.isSafariWithVP8()) {
         // It looks like Firefox doesn't agree with the fix (at least in its
         // current implementation) because it effectively remains active even
         // after we tell it to become passive. Apart from Firefox which I tested
