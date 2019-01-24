@@ -115,8 +115,7 @@ const ScreenObtainer = {
         } else if (browser.isElectron()) {
             return this.obtainScreenOnElectron;
         } else if (browser.isChrome() || browser.isOpera()) {
-            if (browser.supportsGetDisplayMedia()
-                    && !options.desktopSharingChromeDisabled) {
+            if (browser.supportsGetDisplayMedia()) {
 
                 return this.obtainScreenFromGetDisplayMedia;
             } else if (options.desktopSharingChromeDisabled
