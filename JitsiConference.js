@@ -1552,14 +1552,7 @@ JitsiConference.prototype._onIncomingCallP2P = function(
     let rejectReason;
     const role = this.room.getMemberRole(jingleSession.remoteJid);
 
-    if (role !== 'moderator') {
-        rejectReason = {
-            reason: 'security-error',
-            reasonDescription: 'Only focus can start new sessions',
-            errorMsg: 'Rejecting session-initiate from non-focus and'
-                        + `non-moderator user: ${jingleSession.remoteJid}`
-        };
-    } else if (!browser.supportsP2P()) {
+    if (!browser.supportsP2P()) {
         rejectReason = {
             reason: 'unsupported-applications',
             reasonDescription: 'P2P not supported',
