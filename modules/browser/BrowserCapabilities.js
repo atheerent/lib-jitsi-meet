@@ -73,7 +73,13 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @returns {boolean}
      */
     isSafariWithWebrtc() {
-        return this.isSafari();
+        return this.isSafari()
+            && !this.isVersionLessThan('11');
+    }
+
+    isSafariWithVP8() {
+        return this.isSafari()
+            && !this.isVersionLessThan('12');
     }
 
     /**
@@ -219,7 +225,7 @@ export default class BrowserCapabilities extends BrowserDetection {
 
         // Currently Safari using webrtc/adapter does not support video due in
         // part to Safari only supporting H264 and the bridge sending VP8.
-        return true;
+        return !this.isSafariWithWebrtc() || isSafariWithVP8();
     }
 
     /**
