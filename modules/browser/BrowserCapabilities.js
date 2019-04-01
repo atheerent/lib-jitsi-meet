@@ -73,8 +73,7 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @returns {boolean}
      */
     isSafariWithWebrtc() {
-        return this.isSafari()
-            && !this.isVersionLessThan('11');
+        return false;
     }
 
     /**
